@@ -7,15 +7,40 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
   <h1>📦 Наши товары</h1>
+
+  <!-- Кнопка добавления товара -->
+  <div style="text-align: center; margin-bottom: 20px;">
+    <button id="addProductBtn" class="add-btn">➕ Добавить товар</button>
+  </div>
+
   <div class="catalog" id="catalog"></div>
+
+  <!-- Модалка для добавления товара -->
+  <div class="modal-overlay" id="addProductModal">
+    <div class="modal">
+      <h2>Новый товар</h2>
+      <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
+        <input type="text" id="newProductName" placeholder="Название товара" />
+        <input type="text" id="newProductImage" placeholder="Ссылка на картинку (необязательно)" />
+      </div>
+      <button id="saveProductBtn" class="modal-close-btn" style="background: #28a745;">Создать</button>
+      <button id="cancelProductBtn" class="modal-close-btn" style="background: #6c757d; margin-top: 10px;">Отмена</button>
+    </div>
+  </div>
+
+  <!-- Модалка для просмотра товара -->
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal">
       <h2 id="modalTitle">Товар</h2>
       <div class="accounts-container" id="accountsContainer"></div>
+      <button id="addAccountBtn" class="add-account-btn" style="width: 100%; margin-bottom: 15px;">➕ Добавить аккаунт</button>
       <button class="modal-close-btn" id="modalCloseBtn">Закрыть</button>
     </div>
   </div>
+
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script>

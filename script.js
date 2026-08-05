@@ -5,28 +5,37 @@ const productsRef = db.ref('products');
 let products = [];
 
 // ------------------------------------------------------------
-// 1. СЛУШАЕМ ИЗМЕНЕНИЯ В БАЗЕ (синхронизация в реальном времени)
+// НОВАЯ ФУНКЦИЯ: Нормализация ссылок на картинки
+// ------------------------------------------------------------
+function normalizeImageUrl(url) {
+  if (!url) return url;
+  if (url.includes('images.weserv.nl')) return url;
+  if (url.includes('wikia.nocookie.net') || url.includes('fandom.com') || url.includes('fandom')) {
+    return `https://images.weserv.nl/?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
+// ------------------------------------------------------------
+// 1. СЛУШАЕМ ИЗМЕНЕНИЯ В БАЗЕ
 // ------------------------------------------------------------
 productsRef.on('value', (snapshot) => {
   const data = snapshot.val();
   if (data) {
-    // Преобразуем объект в массив
     products = Object.values(data);
     products.sort((a, b) => a.id - b.id);
   } else {
-    // Если данных нет – создаём начальные
     products = getDefaultProducts();
     saveProducts(products);
   }
   renderCatalog();
-  // Если модалка открыта – обновляем её содержимое
   if (currentProductId !== null) {
     openModal(currentProductId);
   }
 });
 
 // ------------------------------------------------------------
-// 2. ФУНКЦИЯ СОХРАНЕНИЯ В БАЗУ
+// 2. СОХРАНЕНИЕ В БАЗУ
 // ------------------------------------------------------------
 function saveProducts(data) {
   const obj = {};
@@ -37,7 +46,7 @@ function saveProducts(data) {
 }
 
 // ------------------------------------------------------------
-// 3. НАЧАЛЬНЫЕ ДАННЫЕ (14 товаров)
+// 3. НАЧАЛЬНЫЕ ДАННЫЕ (14 товаров) с нормализацией
 // ------------------------------------------------------------
 function getDefaultProducts() {
   return [
@@ -176,7 +185,7 @@ function getDefaultProducts() {
     {
       id: 13,
       name: 'Геймпас',
-      image: 'images/BadgeFruitNotifier.webp',   // замените на реальный файл, если есть
+      image: normalizeImageUrl('https://static.wikia.nocookie.net/blox-fruits/images/e/e7/DragonB.png/revision/latest/scale-to-width-down/110?cb=20241216070050&path-prefix=ru'),
       accounts: [
         { name: 'Руслан', count: 0 },
         { name: 'Миша', count: 0 },
@@ -199,7 +208,7 @@ function getDefaultProducts() {
 }
 
 // ------------------------------------------------------------
-// 4. ОТРИСОВКА КАТАЛОГА
+// 4. ОТРИСОВКА КАТАЛОГА (с кнопкой удаления)
 // ------------------------------------------------------------
 function renderCatalog() {
   const catalog = document.getElementById('catalog');
@@ -217,19 +226,32 @@ function renderCatalog() {
     card.className = 'product-card';
     card.dataset.productId = product.id;
 
+    // Используем нормализованную ссылку (она уже сохранена в БД, но на всякий случай)
+    const imageSrc = product.image || 'https://via.placeholder.com/150x120/cccccc/000?text=Нет+картинки';
     card.innerHTML = `
-      <img src="${product.image}" alt="${product.name}" />
+      <img src="${imageSrc}" alt="${product.name}" referrerpolicy="no-referrer" />
       <h3>${product.name}</h3>
+      <button class="delete-product-btn" data-product-id="${product.id}">🗑 Удалить</button>
       <div class="total">Всего: <span id="total-${product.id}">${total}</span> шт.</div>
     `;
 
-    card.addEventListener('click', () => openModal(product.id));
+    card.addEventListener('click', (e) => {
+      if (e.target.classList.contains('delete-product-btn')) return;
+      openModal(product.id);
+    });
+
+    const deleteBtn = card.querySelector('.delete-product-btn');
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteProduct(product.id);
+    });
+
     catalog.appendChild(card);
   });
 }
 
 // ------------------------------------------------------------
-// 5. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// 5. ВСПОМОГАТЕЛЬНЫЕ
 // ------------------------------------------------------------
 function getTotalCount(product) {
   return product.accounts.reduce((sum, acc) => sum + acc.count, 0);
@@ -246,6 +268,13 @@ function openModal(productId) {
   if (!product) return;
 
   document.getElementById('modalTitle').textContent = product.name;
+  renderAccounts(productId);
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function renderAccounts(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
 
   const container = document.getElementById('accountsContainer');
   container.innerHTML = '';
@@ -280,38 +309,105 @@ function openModal(productId) {
       changeAccountCount(productId, index, 1);
     });
 
+    const deleteAccountBtn = document.createElement('button');
+    deleteAccountBtn.className = 'delete-account-btn';
+    deleteAccountBtn.textContent = '×';
+    deleteAccountBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteAccount(productId, index);
+    });
+
     controlsDiv.appendChild(btnMinus);
     controlsDiv.appendChild(countSpan);
     controlsDiv.appendChild(btnPlus);
+    controlsDiv.appendChild(deleteAccountBtn);
 
     accountCard.appendChild(nameSpan);
     accountCard.appendChild(controlsDiv);
     container.appendChild(accountCard);
   });
-
-  document.getElementById('modalOverlay').classList.add('active');
 }
 
 // ------------------------------------------------------------
-// 7. ИЗМЕНЕНИЕ КОЛИЧЕСТВА (сохраняем в Firebase)
+// 7. ИЗМЕНЕНИЕ КОЛИЧЕСТВА
 // ------------------------------------------------------------
 function changeAccountCount(productId, accountIndex, delta) {
   const product = products.find(p => p.id === productId);
   if (!product) return;
-
   const account = product.accounts[accountIndex];
   if (!account) return;
-
   const newCount = Math.max(0, account.count + delta);
   account.count = newCount;
-
-  // Сохраняем весь массив в базу данных Firebase
   saveProducts(products);
-  // Обновление интерфейса произойдёт автоматически через 'value'
 }
 
 // ------------------------------------------------------------
-// 8. ЗАКРЫТИЕ МОДАЛКИ
+// 8. ДОБАВЛЕНИЕ АККАУНТА
+// ------------------------------------------------------------
+function addAccountToProduct(productId, accountName) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  if (!accountName || accountName.trim() === '') {
+    alert('Введите имя аккаунта');
+    return;
+  }
+  product.accounts.push({ name: accountName.trim(), count: 0 });
+  saveProducts(products);
+}
+
+// ------------------------------------------------------------
+// 9. ДОБАВЛЕНИЕ ТОВАРА (с нормализацией ссылки)
+// ------------------------------------------------------------
+function addProduct(name, image) {
+  const maxId = products.reduce((max, p) => Math.max(max, p.id), 0);
+  const newId = maxId + 1;
+  const imageUrl = image ? normalizeImageUrl(image) : 'https://via.placeholder.com/150x120/cccccc/000?text=Новый+товар';
+
+  const newProduct = {
+    id: newId,
+    name: name,
+    image: imageUrl,
+    accounts: [
+      { name: 'Руслан', count: 0 },
+      { name: 'Миша', count: 0 },
+      { name: 'Гера', count: 0 },
+      { name: 'Дима', count: 0 }
+    ]
+  };
+
+  products.push(newProduct);
+  saveProducts(products);
+}
+
+// ------------------------------------------------------------
+// 10. УДАЛЕНИЕ ТОВАРА
+// ------------------------------------------------------------
+function deleteProduct(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  if (confirm(`Вы уверены, что хотите удалить товар "${product.name}"?`)) {
+    products = products.filter(p => p.id !== productId);
+    saveProducts(products);
+    if (currentProductId === productId) closeModal();
+  }
+}
+
+// ------------------------------------------------------------
+// 11. УДАЛЕНИЕ АККАУНТА
+// ------------------------------------------------------------
+function deleteAccount(productId, accountIndex) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  const account = product.accounts[accountIndex];
+  if (!account) return;
+  if (confirm(`Вы уверены, что хотите удалить аккаунт "${account.name}"?`)) {
+    product.accounts.splice(accountIndex, 1);
+    saveProducts(products);
+  }
+}
+
+// ------------------------------------------------------------
+// 12. ЗАКРЫТИЕ МОДАЛКИ
 // ------------------------------------------------------------
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
@@ -320,7 +416,45 @@ function closeModal() {
 
 document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
 document.getElementById('modalOverlay').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('modalOverlay')) {
-    closeModal();
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+
+// ------------------------------------------------------------
+// 13. ОБРАБОТЧИКИ КНОПОК
+// ------------------------------------------------------------
+document.getElementById('addProductBtn').addEventListener('click', () => {
+  document.getElementById('addProductModal').classList.add('active');
+});
+
+document.getElementById('cancelProductBtn').addEventListener('click', () => {
+  document.getElementById('addProductModal').classList.remove('active');
+  document.getElementById('newProductName').value = '';
+  document.getElementById('newProductImage').value = '';
+});
+
+document.getElementById('saveProductBtn').addEventListener('click', () => {
+  const name = document.getElementById('newProductName').value.trim();
+  const image = document.getElementById('newProductImage').value.trim();
+  if (!name) {
+    alert('Введите название товара');
+    return;
+  }
+  addProduct(name, image);
+  document.getElementById('addProductModal').classList.remove('active');
+  document.getElementById('newProductName').value = '';
+  document.getElementById('newProductImage').value = '';
+});
+
+document.getElementById('addAccountBtn').addEventListener('click', () => {
+  if (currentProductId === null) return;
+  const name = prompt('Введите имя нового аккаунта:', 'Новый аккаунт');
+  if (name !== null) {
+    addAccountToProduct(currentProductId, name);
+  }
+});
+
+document.getElementById('addProductModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('addProductModal')) {
+    document.getElementById('addProductModal').classList.remove('active');
   }
 });

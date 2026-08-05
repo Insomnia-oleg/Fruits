@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Карточки товаров</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>📦 Наши товары</h1>
+  <div class="catalog" id="catalog"></div>
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <h2 id="modalTitle">Товар</h2>
+      <div class="accounts-container" id="accountsContainer"></div>
+      <button class="modal-close-btn" id="modalCloseBtn">Закрыть</button>
+    </div>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCCUpgNGhSse3zhyY38S6v4DZQCvQ3X8Ik",
+      authDomain: "blox-fruit-ef97a.firebaseapp.com",
+      databaseURL: "https://blox-fruit-ef97a-default-rtdb.europe-west1.firebasedatabase.app/",
+      projectId: "blox-fruit-ef97a",
+      storageBucket: "blox-fruit-ef97a.firebasestorage.app",
+      messagingSenderId: "984744454694",
+      appId: "1:984744454694:web:389579df66de11d84fd4e7",
+      measurementId: "G-18XMKLMFXW"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+  <script src="script.js"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@ const productsRef = db.ref('products');
 let products = [];
 
 // ------------------------------------------------------------
-// НОВАЯ ФУНКЦИЯ: Нормализация ссылок на картинки
+// Нормализация ссылок на картинки (прокси для Fandom)
 // ------------------------------------------------------------
 function normalizeImageUrl(url) {
   if (!url) return url;
@@ -17,7 +17,7 @@ function normalizeImageUrl(url) {
 }
 
 // ------------------------------------------------------------
-// 1. СЛУШАЕМ ИЗМЕНЕНИЯ В БАЗЕ
+// 1. СЛУШАЕМ ИЗМЕНЕНИЯ В БАЗЕ (синхронизация в реальном времени)
 // ------------------------------------------------------------
 productsRef.on('value', (snapshot) => {
   const data = snapshot.val();
@@ -46,7 +46,7 @@ function saveProducts(data) {
 }
 
 // ------------------------------------------------------------
-// 3. НАЧАЛЬНЫЕ ДАННЫЕ (14 товаров) с нормализацией
+// 3. НАЧАЛЬНЫЕ ДАННЫЕ (14 товаров)
 // ------------------------------------------------------------
 function getDefaultProducts() {
   return [
@@ -208,7 +208,7 @@ function getDefaultProducts() {
 }
 
 // ------------------------------------------------------------
-// 4. ОТРИСОВКА КАТАЛОГА (с кнопкой удаления)
+// 4. ОТРИСОВКА КАТАЛОГА (с кнопкой удаления и нормализацией)
 // ------------------------------------------------------------
 function renderCatalog() {
   const catalog = document.getElementById('catalog');
@@ -226,8 +226,8 @@ function renderCatalog() {
     card.className = 'product-card';
     card.dataset.productId = product.id;
 
-    // Используем нормализованную ссылку (она уже сохранена в БД, но на всякий случай)
-    const imageSrc = product.image || 'https://via.placeholder.com/150x120/cccccc/000?text=Нет+картинки';
+    const imageSrc = product.image ? normalizeImageUrl(product.image) : 'https://via.placeholder.com/150x120/cccccc/000?text=Нет+картинки';
+
     card.innerHTML = `
       <img src="${imageSrc}" alt="${product.name}" referrerpolicy="no-referrer" />
       <h3>${product.name}</h3>
@@ -258,7 +258,7 @@ function getTotalCount(product) {
 }
 
 // ------------------------------------------------------------
-// 6. МОДАЛЬНОЕ ОКНО
+// 6. МОДАЛЬНОЕ ОКНО (просмотр товара)
 // ------------------------------------------------------------
 let currentProductId = null;
 
@@ -422,16 +422,19 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 // ------------------------------------------------------------
 // 13. ОБРАБОТЧИКИ КНОПОК
 // ------------------------------------------------------------
+// Открыть модалку добавления товара
 document.getElementById('addProductBtn').addEventListener('click', () => {
   document.getElementById('addProductModal').classList.add('active');
 });
 
+// Отмена в модалке добавления товара
 document.getElementById('cancelProductBtn').addEventListener('click', () => {
   document.getElementById('addProductModal').classList.remove('active');
   document.getElementById('newProductName').value = '';
   document.getElementById('newProductImage').value = '';
 });
 
+// Создать новый товар
 document.getElementById('saveProductBtn').addEventListener('click', () => {
   const name = document.getElementById('newProductName').value.trim();
   const image = document.getElementById('newProductImage').value.trim();
@@ -445,6 +448,7 @@ document.getElementById('saveProductBtn').addEventListener('click', () => {
   document.getElementById('newProductImage').value = '';
 });
 
+// Добавить аккаунт (с prompt)
 document.getElementById('addAccountBtn').addEventListener('click', () => {
   if (currentProductId === null) return;
   const name = prompt('Введите имя нового аккаунта:', 'Новый аккаунт');
@@ -453,9 +457,9 @@ document.getElementById('addAccountBtn').addEventListener('click', () => {
   }
 });
 
+// Закрытие модалки добавления товара по клику на фон
 document.getElementById('addProductModal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('addProductModal')) {
     document.getElementById('addProductModal').classList.remove('active');
   }
 });
-

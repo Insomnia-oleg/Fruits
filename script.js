@@ -1,11 +1,13 @@
 // Получаем ссылку на базу данных
 const db = firebase.database();
 const productsRef = db.ref('products');
+const globalAccountsRef = db.ref('globalAccounts');
 
 let products = [];
+let globalAccounts = []; // массив имён аккаунтов
 
 // ------------------------------------------------------------
-// Нормализация ссылок на картинки (прокси для Fandom)
+// Нормализация ссылок на картинки
 // ------------------------------------------------------------
 function normalizeImageUrl(url) {
   if (!url) return url;
@@ -17,7 +19,45 @@ function normalizeImageUrl(url) {
 }
 
 // ------------------------------------------------------------
-// 1. СЛУШАЕМ ИЗМЕНЕНИЯ В БАЗЕ (синхронизация в реальном времени)
+// ЗАГРУЗКА ГЛОБАЛЬНЫХ АККАУНТОВ
+// ------------------------------------------------------------
+globalAccountsRef.on('value', (snapshot) => {
+  const data = snapshot.val();
+  if (data && Array.isArray(data)) {
+    globalAccounts = data;
+  } else {
+    // Если нет – создаём начальные
+    globalAccounts = ['Руслан', 'Миша', 'Гера', 'Дима'];
+    globalAccountsRef.set(globalAccounts);
+  }
+  // После обновления аккаунтов пересобираем товары, чтобы добавить недостающие
+  syncAccountsWithProducts();
+});
+
+// ------------------------------------------------------------
+// СИНХРОНИЗАЦИЯ: добавляем недостающие аккаунты в каждый товар
+// ------------------------------------------------------------
+function syncAccountsWithProducts() {
+  if (!products.length) return;
+  let changed = false;
+  products.forEach(product => {
+    // product.counts – объект { имя: количество }
+    if (!product.counts) product.counts = {};
+    globalAccounts.forEach(accName => {
+      if (!(accName in product.counts)) {
+        product.counts[accName] = 0;
+        changed = true;
+      }
+    });
+  });
+  if (changed) {
+    saveProducts(products);
+  }
+  // Перерисовываем (это вызовет renderCatalog)
+}
+
+// ------------------------------------------------------------
+// 1. ЗАГРУЗКА ТОВАРОВ
 // ------------------------------------------------------------
 productsRef.on('value', (snapshot) => {
   const data = snapshot.val();
@@ -25,9 +65,12 @@ productsRef.on('value', (snapshot) => {
     products = Object.values(data);
     products.sort((a, b) => a.id - b.id);
   } else {
+    // Если товаров нет – создаём начальные (с учётом globalAccounts)
     products = getDefaultProducts();
     saveProducts(products);
   }
+  // Синхронизируем аккаунты (добавим недостающие)
+  syncAccountsWithProducts();
   renderCatalog();
   if (currentProductId !== null) {
     openModal(currentProductId);
@@ -35,7 +78,7 @@ productsRef.on('value', (snapshot) => {
 });
 
 // ------------------------------------------------------------
-// 2. СОХРАНЕНИЕ В БАЗУ
+// 2. СОХРАНЕНИЕ ТОВАРОВ
 // ------------------------------------------------------------
 function saveProducts(data) {
   const obj = {};
@@ -46,169 +89,107 @@ function saveProducts(data) {
 }
 
 // ------------------------------------------------------------
-// 3. НАЧАЛЬНЫЕ ДАННЫЕ (14 товаров)
+// 3. НАЧАЛЬНЫЕ ТОВАРЫ (создаются с текущими глобальными аккаунтами)
 // ------------------------------------------------------------
 function getDefaultProducts() {
+  // Если globalAccounts ещё не загружены – используем запасные
+  const accs = globalAccounts.length ? globalAccounts : ['Руслан', 'Миша', 'Гера', 'Дима'];
+  const createCounts = () => {
+    const counts = {};
+    accs.forEach(name => { counts[name] = 0; });
+    return counts;
+  };
+
   return [
     {
       id: 1,
       name: 'Лайтнинг',
       image: 'images/LightningB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 2,
       name: 'Pain',
       image: 'images/PainB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 3,
       name: 'Будда',
       image: 'images/BuddhaB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 4,
       name: 'Контроль',
       image: 'images/ControlB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 5,
       name: 'Гравитация',
       image: 'images/GravityB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 6,
       name: 'Газ',
       image: 'images/GasB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 7,
       name: 'Тесто',
       image: 'images/DoughB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 8,
       name: 'Яд',
       image: 'images/VenomB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 9,
       name: 'Портал',
       image: 'images/PortalB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 10,
       name: 'Кицуне',
       image: 'images/KitsuneB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 11,
       name: 'Дракон',
       image: 'images/DragonB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 12,
       name: 'Йети',
       image: 'images/YetiFruitB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 13,
       name: 'Геймпас',
       image: normalizeImageUrl('https://static.wikia.nocookie.net/blox-fruits/images/e/e7/DragonB.png/revision/latest/scale-to-width-down/110?cb=20241216070050&path-prefix=ru'),
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     },
     {
       id: 14,
       name: 'Мамонт',
       image: 'images/MammothB.webp',
-      accounts: [
-        { name: 'Руслан', count: 0 },
-        { name: 'Миша', count: 0 },
-        { name: 'Гера', count: 0 },
-        { name: 'Дима', count: 0 }
-      ]
+      counts: createCounts()
     }
   ];
 }
 
 // ------------------------------------------------------------
-// 4. ОТРИСОВКА КАТАЛОГА (с кнопкой удаления и нормализацией)
+// 4. ОТРИСОВКА КАТАЛОГА
 // ------------------------------------------------------------
 function renderCatalog() {
   const catalog = document.getElementById('catalog');
@@ -251,14 +232,15 @@ function renderCatalog() {
 }
 
 // ------------------------------------------------------------
-// 5. ВСПОМОГАТЕЛЬНЫЕ
+// 5. ПОДСЧЁТ ОБЩЕГО КОЛИЧЕСТВА
 // ------------------------------------------------------------
 function getTotalCount(product) {
-  return product.accounts.reduce((sum, acc) => sum + acc.count, 0);
+  if (!product.counts) return 0;
+  return Object.values(product.counts).reduce((sum, val) => sum + val, 0);
 }
 
 // ------------------------------------------------------------
-// 6. МОДАЛЬНОЕ ОКНО (просмотр товара)
+// 6. МОДАЛЬНОЕ ОКНО (показывает аккаунты из объекта counts)
 // ------------------------------------------------------------
 let currentProductId = null;
 
@@ -275,17 +257,21 @@ function openModal(productId) {
 function renderAccounts(productId) {
   const product = products.find(p => p.id === productId);
   if (!product) return;
+  if (!product.counts) product.counts = {};
 
   const container = document.getElementById('accountsContainer');
   container.innerHTML = '';
 
-  product.accounts.forEach((account, index) => {
+  // Проходим по глобальному списку, чтобы порядок был единым
+  globalAccounts.forEach((accName, index) => {
+    const count = product.counts[accName] !== undefined ? product.counts[accName] : 0;
+
     const accountCard = document.createElement('div');
     accountCard.className = 'account-card';
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'name';
-    nameSpan.textContent = account.name;
+    nameSpan.textContent = accName;
 
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'controls';
@@ -294,27 +280,28 @@ function renderAccounts(productId) {
     btnMinus.textContent = '−';
     btnMinus.addEventListener('click', (e) => {
       e.stopPropagation();
-      changeAccountCount(productId, index, -1);
+      changeAccountCount(productId, accName, -1);
     });
 
     const countSpan = document.createElement('span');
     countSpan.className = 'count';
-    countSpan.id = `acc-count-${productId}-${index}`;
-    countSpan.textContent = account.count;
+    countSpan.id = `acc-count-${productId}-${accName}`;
+    countSpan.textContent = count;
 
     const btnPlus = document.createElement('button');
     btnPlus.textContent = '+';
     btnPlus.addEventListener('click', (e) => {
       e.stopPropagation();
-      changeAccountCount(productId, index, 1);
+      changeAccountCount(productId, accName, 1);
     });
 
+    // Кнопка удаления аккаунта (удаляет из глобального списка)
     const deleteAccountBtn = document.createElement('button');
     deleteAccountBtn.className = 'delete-account-btn';
     deleteAccountBtn.textContent = '×';
     deleteAccountBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      deleteAccount(productId, index);
+      deleteGlobalAccount(accName);
     });
 
     controlsDiv.appendChild(btnMinus);
@@ -329,50 +316,84 @@ function renderAccounts(productId) {
 }
 
 // ------------------------------------------------------------
-// 7. ИЗМЕНЕНИЕ КОЛИЧЕСТВА
+// 7. ИЗМЕНЕНИЕ КОЛИЧЕСТВА (по имени аккаунта)
 // ------------------------------------------------------------
-function changeAccountCount(productId, accountIndex, delta) {
+function changeAccountCount(productId, accountName, delta) {
   const product = products.find(p => p.id === productId);
   if (!product) return;
-  const account = product.accounts[accountIndex];
-  if (!account) return;
-  const newCount = Math.max(0, account.count + delta);
-  account.count = newCount;
+  if (!product.counts) product.counts = {};
+  const current = product.counts[accountName] || 0;
+  const newCount = Math.max(0, current + delta);
+  product.counts[accountName] = newCount;
   saveProducts(products);
 }
 
 // ------------------------------------------------------------
-// 8. ДОБАВЛЕНИЕ АККАУНТА
+// 8. ДОБАВЛЕНИЕ НОВОГО АККАУНТА (глобально)
 // ------------------------------------------------------------
-function addAccountToProduct(productId, accountName) {
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
+function addGlobalAccount(accountName) {
   if (!accountName || accountName.trim() === '') {
     alert('Введите имя аккаунта');
     return;
   }
-  product.accounts.push({ name: accountName.trim(), count: 0 });
+  const name = accountName.trim();
+  if (globalAccounts.includes(name)) {
+    alert('Аккаунт с таким именем уже существует');
+    return;
+  }
+
+  // Добавляем в глобальный список
+  globalAccounts.push(name);
+  globalAccountsRef.set(globalAccounts);
+
+  // Добавляем этот аккаунт во все товары (с нулём)
+  products.forEach(product => {
+    if (!product.counts) product.counts = {};
+    product.counts[name] = 0;
+  });
   saveProducts(products);
+  // Интерфейс обновится через события
 }
 
 // ------------------------------------------------------------
-// 9. ДОБАВЛЕНИЕ ТОВАРА (с нормализацией ссылки)
+// 9. УДАЛЕНИЕ АККАУНТА (глобально)
+// ------------------------------------------------------------
+function deleteGlobalAccount(accountName) {
+  if (!confirm(`Вы уверены, что хотите удалить аккаунт "${accountName}" из всех товаров?`)) return;
+
+  // Удаляем из глобального списка
+  const index = globalAccounts.indexOf(accountName);
+  if (index === -1) return;
+  globalAccounts.splice(index, 1);
+  globalAccountsRef.set(globalAccounts);
+
+  // Удаляем это поле из всех товаров
+  products.forEach(product => {
+    if (product.counts) {
+      delete product.counts[accountName];
+    }
+  });
+  saveProducts(products);
+  // Интерфейс обновится
+}
+
+// ------------------------------------------------------------
+// 10. ДОБАВЛЕНИЕ ТОВАРА (с текущим глобальным списком аккаунтов)
 // ------------------------------------------------------------
 function addProduct(name, image) {
   const maxId = products.reduce((max, p) => Math.max(max, p.id), 0);
   const newId = maxId + 1;
   const imageUrl = image ? normalizeImageUrl(image) : 'https://via.placeholder.com/150x120/cccccc/000?text=Новый+товар';
 
+  // Создаём объект counts из глобальных аккаунтов
+  const counts = {};
+  globalAccounts.forEach(acc => { counts[acc] = 0; });
+
   const newProduct = {
     id: newId,
     name: name,
     image: imageUrl,
-    accounts: [
-      { name: 'Руслан', count: 0 },
-      { name: 'Миша', count: 0 },
-      { name: 'Гера', count: 0 },
-      { name: 'Дима', count: 0 }
-    ]
+    counts: counts
   };
 
   products.push(newProduct);
@@ -380,7 +401,7 @@ function addProduct(name, image) {
 }
 
 // ------------------------------------------------------------
-// 10. УДАЛЕНИЕ ТОВАРА
+// 11. УДАЛЕНИЕ ТОВАРА
 // ------------------------------------------------------------
 function deleteProduct(productId) {
   const product = products.find(p => p.id === productId);
@@ -389,20 +410,6 @@ function deleteProduct(productId) {
     products = products.filter(p => p.id !== productId);
     saveProducts(products);
     if (currentProductId === productId) closeModal();
-  }
-}
-
-// ------------------------------------------------------------
-// 11. УДАЛЕНИЕ АККАУНТА
-// ------------------------------------------------------------
-function deleteAccount(productId, accountIndex) {
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
-  const account = product.accounts[accountIndex];
-  if (!account) return;
-  if (confirm(`Вы уверены, что хотите удалить аккаунт "${account.name}"?`)) {
-    product.accounts.splice(accountIndex, 1);
-    saveProducts(products);
   }
 }
 
@@ -422,19 +429,17 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 // ------------------------------------------------------------
 // 13. ОБРАБОТЧИКИ КНОПОК
 // ------------------------------------------------------------
-// Открыть модалку добавления товара
+// Добавить товар
 document.getElementById('addProductBtn').addEventListener('click', () => {
   document.getElementById('addProductModal').classList.add('active');
 });
 
-// Отмена в модалке добавления товара
 document.getElementById('cancelProductBtn').addEventListener('click', () => {
   document.getElementById('addProductModal').classList.remove('active');
   document.getElementById('newProductName').value = '';
   document.getElementById('newProductImage').value = '';
 });
 
-// Создать новый товар
 document.getElementById('saveProductBtn').addEventListener('click', () => {
   const name = document.getElementById('newProductName').value.trim();
   const image = document.getElementById('newProductImage').value.trim();
@@ -448,16 +453,15 @@ document.getElementById('saveProductBtn').addEventListener('click', () => {
   document.getElementById('newProductImage').value = '';
 });
 
-// Добавить аккаунт (с prompt)
+// Добавить аккаунт (глобально) – теперь он появится у всех товаров
 document.getElementById('addAccountBtn').addEventListener('click', () => {
-  if (currentProductId === null) return;
-  const name = prompt('Введите имя нового аккаунта:', 'Новый аккаунт');
+  const name = prompt('Введите имя нового аккаунта (будет добавлен ко всем товарам):', 'Новый аккаунт');
   if (name !== null) {
-    addAccountToProduct(currentProductId, name);
+    addGlobalAccount(name);
   }
 });
 
-// Закрытие модалки добавления товара по клику на фон
+// Закрытие модалки добавления товара по фону
 document.getElementById('addProductModal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('addProductModal')) {
     document.getElementById('addProductModal').classList.remove('active');

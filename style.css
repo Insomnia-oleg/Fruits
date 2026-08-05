@@ -190,6 +190,7 @@ h1 {
   background: #c82333;
 }
 
+/* Кнопки в модалках (Закрыть, Создать, Отмена) */
 .modal-close-btn {
   display: block;
   width: 100%;

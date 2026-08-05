@@ -23,25 +23,56 @@ function normalizeImageUrl(url) {
 // ------------------------------------------------------------
 globalAccountsRef.on('value', (snapshot) => {
   const data = snapshot.val();
-  if (data && Array.isArray(data)) {
+  if (data && Array.isArray(data) && data.length > 0) {
     globalAccounts = data;
   } else {
     // Если нет – создаём начальные
     globalAccounts = ['Руслан', 'Миша', 'Гера', 'Дима'];
     globalAccountsRef.set(globalAccounts);
   }
-  // После обновления аккаунтов пересобираем товары, чтобы добавить недостающие
+  // После обновления аккаунтов синхронизируем с товарами
   syncAccountsWithProducts();
 });
+
+// ------------------------------------------------------------
+// МИГРАЦИЯ СТАРЫХ ДАННЫХ (из accounts в counts)
+// ------------------------------------------------------------
+function migrateOldData() {
+  let changed = false;
+  products.forEach(product => {
+    // Если есть поле accounts (массив) и нет counts – конвертируем
+    if (product.accounts && Array.isArray(product.accounts) && !product.counts) {
+      const counts = {};
+      product.accounts.forEach(acc => {
+        counts[acc.name] = acc.count || 0;
+      });
+      product.counts = counts;
+      delete product.accounts;
+      changed = true;
+    }
+    // Если нет ни accounts, ни counts – создаём пустой counts
+    if (!product.counts) {
+      product.counts = {};
+      changed = true;
+    }
+  });
+  return changed;
+}
 
 // ------------------------------------------------------------
 // СИНХРОНИЗАЦИЯ: добавляем недостающие аккаунты в каждый товар
 // ------------------------------------------------------------
 function syncAccountsWithProducts() {
   if (!products.length) return;
+  // Сначала мигрируем старые данные
+  const migrated = migrateOldData();
+  if (migrated) {
+    saveProducts(products);
+  }
+
+  // Теперь добавляем недостающие аккаунты из глобального списка
   let changed = false;
   products.forEach(product => {
-    // product.counts – объект { имя: количество }
     if (!product.counts) product.counts = {};
     globalAccounts.forEach(accName => {
       if (!(accName in product.counts)) {
@@ -50,10 +81,30 @@ function syncAccountsWithProducts() {
       }
     });
   });
+
+  // Если глобальный список пуст – создаём из всех имён, которые есть в товарах
+  if (globalAccounts.length === 0) {
+    const allNames = new Set();
+    products.forEach(product => {
+      if (product.counts) {
+        Object.keys(product.counts).forEach(name => allNames.add(name));
+      }
+    });
+    if (allNames.size > 0) {
+      globalAccounts = Array.from(allNames);
+      globalAccountsRef.set(globalAccounts);
+      changed = true;
+    }
+  }
+
   if (changed) {
     saveProducts(products);
   }
-  // Перерисовываем (это вызовет renderCatalog)
+  // Перерисовываем каталог
+  renderCatalog();
+  if (currentProductId !== null) {
+    openModal(currentProductId);
+  }
 }
 
 // ------------------------------------------------------------
@@ -69,12 +120,8 @@ productsRef.on('value', (snapshot) => {
     products = getDefaultProducts();
     saveProducts(products);
   }
-  // Синхронизируем аккаунты (добавим недостающие)
+  // Синхронизация и миграция
   syncAccountsWithProducts();
-  renderCatalog();
-  if (currentProductId !== null) {
-    openModal(currentProductId);
-  }
 });
 
 // ------------------------------------------------------------
@@ -83,6 +130,8 @@ productsRef.on('value', (snapshot) => {
 function saveProducts(data) {
   const obj = {};
   data.forEach(item => {
+    // Убеждаемся, что поле counts есть (для новых товаров)
+    if (!item.counts) item.counts = {};
     obj[item.id] = item;
   });
   productsRef.set(obj);
@@ -92,7 +141,6 @@ function saveProducts(data) {
 // 3. НАЧАЛЬНЫЕ ТОВАРЫ (создаются с текущими глобальными аккаунтами)
 // ------------------------------------------------------------
 function getDefaultProducts() {
-  // Если globalAccounts ещё не загружены – используем запасные
   const accs = globalAccounts.length ? globalAccounts : ['Руслан', 'Миша', 'Гера', 'Дима'];
   const createCounts = () => {
     const counts = {};
@@ -240,7 +288,7 @@ function getTotalCount(product) {
 }
 
 // ------------------------------------------------------------
-// 6. МОДАЛЬНОЕ ОКНО (показывает аккаунты из объекта counts)
+// 6. МОДАЛЬНОЕ ОКНО
 // ------------------------------------------------------------
 let currentProductId = null;
 
@@ -263,7 +311,7 @@ function renderAccounts(productId) {
   container.innerHTML = '';
 
   // Проходим по глобальному списку, чтобы порядок был единым
-  globalAccounts.forEach((accName, index) => {
+  globalAccounts.forEach((accName) => {
     const count = product.counts[accName] !== undefined ? product.counts[accName] : 0;
 
     const accountCard = document.createElement('div');
@@ -295,7 +343,6 @@ function renderAccounts(productId) {
       changeAccountCount(productId, accName, 1);
     });
 
-    // Кнопка удаления аккаунта (удаляет из глобального списка)
     const deleteAccountBtn = document.createElement('button');
     deleteAccountBtn.className = 'delete-account-btn';
     deleteAccountBtn.textContent = '×';
@@ -316,7 +363,7 @@ function renderAccounts(productId) {
 }
 
 // ------------------------------------------------------------
-// 7. ИЗМЕНЕНИЕ КОЛИЧЕСТВА (по имени аккаунта)
+// 7. ИЗМЕНЕНИЕ КОЛИЧЕСТВА
 // ------------------------------------------------------------
 function changeAccountCount(productId, accountName, delta) {
   const product = products.find(p => p.id === productId);
@@ -378,14 +425,13 @@ function deleteGlobalAccount(accountName) {
 }
 
 // ------------------------------------------------------------
-// 10. ДОБАВЛЕНИЕ ТОВАРА (с текущим глобальным списком аккаунтов)
+// 10. ДОБАВЛЕНИЕ ТОВАРА
 // ------------------------------------------------------------
 function addProduct(name, image) {
   const maxId = products.reduce((max, p) => Math.max(max, p.id), 0);
   const newId = maxId + 1;
   const imageUrl = image ? normalizeImageUrl(image) : 'https://via.placeholder.com/150x120/cccccc/000?text=Новый+товар';
 
-  // Создаём объект counts из глобальных аккаунтов
   const counts = {};
   globalAccounts.forEach(acc => { counts[acc] = 0; });
 
@@ -429,7 +475,6 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 // ------------------------------------------------------------
 // 13. ОБРАБОТЧИКИ КНОПОК
 // ------------------------------------------------------------
-// Добавить товар
 document.getElementById('addProductBtn').addEventListener('click', () => {
   document.getElementById('addProductModal').classList.add('active');
 });
@@ -453,7 +498,6 @@ document.getElementById('saveProductBtn').addEventListener('click', () => {
   document.getElementById('newProductImage').value = '';
 });
 
-// Добавить аккаунт (глобально) – теперь он появится у всех товаров
 document.getElementById('addAccountBtn').addEventListener('click', () => {
   const name = prompt('Введите имя нового аккаунта (будет добавлен ко всем товарам):', 'Новый аккаунт');
   if (name !== null) {
@@ -461,7 +505,6 @@ document.getElementById('addAccountBtn').addEventListener('click', () => {
   }
 });
 
-// Закрытие модалки добавления товара по фону
 document.getElementById('addProductModal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('addProductModal')) {
     document.getElementById('addProductModal').classList.remove('active');

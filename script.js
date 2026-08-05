@@ -458,3 +458,4 @@ document.getElementById('addProductModal').addEventListener('click', (e) => {
     document.getElementById('addProductModal').classList.remove('active');
   }
 });
+
